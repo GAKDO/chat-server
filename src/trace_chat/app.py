@@ -23,7 +23,7 @@ from . import __version__
 from .clientip import client_ip, is_trusted, parse_networks
 from .config import Settings
 from .context import TraceApi, UserContextCache, build_user_context, wants_account_data
-from .knowledge import system_prompt
+from .knowledge import plain_text, system_prompt
 from .llm import AllProvidersFailed, ChatRouter, GeminiClient, Message, OllamaClient
 from .ratelimit import DailyLimiter, RateLimiter
 
@@ -158,6 +158,6 @@ def create_app(
             reply = router.reply(system_prompt(user_context), messages)
         except AllProvidersFailed:
             return _problem(503, "INTERNAL_ERROR", "챗봇이 잠시 답할 수 없습니다", "잠시 뒤 다시 물어봐 주세요.", path)
-        return ChatResponse(reply=reply.text, provider=reply.provider)
+        return ChatResponse(reply=plain_text(reply.text) or reply.text, provider=reply.provider)
 
     return app

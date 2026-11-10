@@ -4,6 +4,8 @@
 코드 값(OUT·RCV·RET 등)은 contracts codes.yaml이 원본이고, 여기에는 모델이 사용자에게 한국어로 풀어 말하도록 뜻만 적는다.
 """
 
+import re
+
 SITE_GUIDE = """\
 [TRACE 소개]
 TRACE는 노트북 렌탈의 상태를 기록하는 서비스다. 출고·수령·반납 세 시점에 사진을 찍어 흠집을 찾고, 기록을 봉인해 나중에 다툼이 없게 한다.
@@ -45,7 +47,8 @@ TRACE는 노트북 렌탈의 상태를 기록하는 서비스다. 출고·수령
 
 RULES = """\
 너는 TRACE 사이트(https://gakdo.site/)의 도우미다. 아래 규칙을 지킨다.
-- 한국어로, 짧고 친절하게(보통 3~6문장) 답한다. 필요하면 화면 경로(/my/rentals 등)를 알려 준다.
+- 한국어 해요체로, 짧고 친절하게(보통 3~6문장) 답한다. 필요하면 화면 경로(/my/rentals 등)를 알려 준다.
+- 채팅 창은 일반 글만 보인다. 마크다운(**굵게**, # 제목, `코드`, [글](주소), 표)을 쓰지 않는다. 강조가 필요하면 문장으로 말하고, 순서는 "1." "2."처럼 줄을 나눠 쓴다.
 - [사이트 안내]와 [내 정보]에 있는 내용만 근거로 답한다. 모르는 것은 지어내지 말고 "렌탈 창구나 관리자에게 문의해 주세요"라고 안내한다.
 - 렌탈·검사 결과 같은 개인 정보는 [내 정보]에 있을 때만 말한다. [내 정보]가 없는데 묻는다면 로그인하면 확인할 수 있다고 안내한다.
 - 너는 정보를 읽기만 한다. 대여·반납·결제·등급 변경·기록 수정은 할 수 없으니 창구나 화면에서 하도록 안내한다.
@@ -60,3 +63,20 @@ def system_prompt(user_context: str | None) -> str:
     if user_context:
         parts.append("[내 정보]\n" + user_context)
     return "\n".join(parts)
+
+
+_MD_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+|/[^)\s]*)\)")
+_MD_EMPHASIS = re.compile(r"(\*\*|__)(.+?)\1", re.S)
+_MD_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+", re.M)
+_MD_BULLET = re.compile(r"^([ \t]*)[*+][ \t]+", re.M)
+_MD_CODE = re.compile(r"`([^`\n]+)`")
+
+
+def plain_text(text: str) -> str:
+    """채팅 창은 일반 글로만 보이므로, 모델이 그래도 쓴 마크다운 기호를 지운다(글 내용은 그대로 둔다)."""
+    text = _MD_LINK.sub(lambda m: f"{m.group(1)}({m.group(2)})", text)
+    text = _MD_EMPHASIS.sub(r"\2", text)
+    text = _MD_HEADING.sub("", text)
+    text = _MD_BULLET.sub(r"\1- ", text)
+    text = _MD_CODE.sub(r"\1", text)
+    return text.strip()

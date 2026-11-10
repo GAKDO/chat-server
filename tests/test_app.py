@@ -152,3 +152,16 @@ def test_모델이_모두_실패하면_503():
     c, _, _ = make(router=FakeRouter(fail=True))
     r = ask(c, "안녕")
     assert r.status_code == 503 and r.json()["code"] == "INTERNAL_ERROR"
+
+
+def test_모델이_쓴_마크다운_기호는_지우고_일반_글로_답한다():
+    class MdRouter(FakeRouter):
+        def reply(self, system, messages):
+            self.calls.append((system, list(messages)))
+            text = "## 안내\n노트북 결제는 **렌탈 창구**에서 해요.\n* [회원가입](/signup) 먼저\n`QR`을 스캔"
+            return Reply(text, "gemini")
+
+    c, router, _ = make(router=MdRouter())
+    r = ask(c, "어떻게 빌려요?")
+    assert r.json()["reply"] == "안내\n노트북 결제는 렌탈 창구에서 해요.\n- 회원가입(/signup) 먼저\nQR을 스캔"
+    assert "마크다운" in router.calls[0][0]
