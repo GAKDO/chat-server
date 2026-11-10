@@ -32,7 +32,7 @@ POST /api/v1/chat
 ```
 
 - `messages`: 최근 대화(최대 40개, 한 개 2000자). 마지막은 `user`여야 한다. 서버는 대화를 저장하지 않고, 모델에는 최근 10개만 보낸다.
-- 오류는 Problem Details(`application/problem+json`): 400 `VALIDATION_FAILED`, 429 `RATE_LIMITED`(사용자·IP당 1분 20개), 503 `INTERNAL_ERROR`(두 모델 모두 실패).
+- 오류는 Problem Details(`application/problem+json`): 400 `VALIDATION_FAILED`, 429 `RATE_LIMITED`(IP당 1분 20개, IP당 하루 100개, 전체 하루 1000개. `detail`에 안내 문구), 503 `INTERNAL_ERROR`(두 모델 모두 실패).
 - 내 정보는 질문에 렌탈·검사·등급·반납 같은 말이 있을 때만 읽는다(`GET /api/v1/rentals`, `/api/v1/rentals/{id}`, `/api/v1/captures/checkpoints/{id}/inspection`). 같은 토큰은 30초 캐시한다.
 
 ## 환경 변수
@@ -45,7 +45,10 @@ POST /api/v1/chat
 | `OLLAMA_MODEL` | `qwen2.5:3b` | CPU 서버 기준. GPU가 있으면 `qwen2.5:7b` |
 | `TRACE_API_URL` | `http://gateway:8080` | 내 정보를 읽을 API 입구 |
 | `GEMINI_COOLDOWN_SECONDS` | `300` | 한도 소진 뒤 Gemini를 건너뛰는 시간 |
-| `CHAT_RATE_LIMIT_PER_MINUTE` | `20` | 사용자(토큰)·IP당 1분 질문 수 |
+| `CHAT_RATE_LIMIT_PER_MINUTE` | `20` | IP당 1분 질문 수. 토큰은 검증하지 않으므로 제한 기준으로 쓰지 않는다 |
+| `CHAT_DAILY_LIMIT_PER_IP` | `100` | IP당 하루 질문 수(한국 시간 자정에 초기화, 0이면 끔) |
+| `CHAT_DAILY_LIMIT_TOTAL` | `1000` | 서비스 전체 하루 질문 수(Gemini 사용량 상한, 0이면 끔) |
+| `CHAT_TRUSTED_PROXIES` | 학교 프록시 `220.67.216.12` + 사설·도커 대역 | `X-Forwarded-For`를 오른쪽부터 읽으며 건너뛸 프록시(IP·CIDR, 쉼표) |
 | `OLLAMA_TIMEOUT_SECONDS` | `120` | |
 
 ## 학교 서버 Compose에 붙이기
@@ -84,3 +87,9 @@ GEMINI_API_KEY=... OLLAMA_BASE_URL=http://localhost:11434 TRACE_API_URL=https://
 ```
 
 테스트는 Gemini·Ollama·gateway를 httpx `MockTransport`로 바꿔 끼우므로 키나 네트워크 없이 돈다.
+
+## 실제 IP와 요청 제한
+
+사용자 → 학교 프록시(nginx, `220.67.216.12`) → gateway → chat-server 순서로 들어온다. gateway가 `X-Forwarded-For` 끝에 프록시 주소를 붙여 넘기므로,
+오른쪽부터 읽으며 `CHAT_TRUSTED_PROXIES`에 든 주소를 건너뛰고 처음 나오는 주소를 사용자 IP로 본다. 왼쪽 값은 사용자가 꾸밀 수 있어 쓰지 않는다.
+`X-Forwarded-For`가 프록시 주소뿐이면 `X-Real-IP`를 쓴다. 카운터는 메모리에 있어 chat-server를 다시 시작하면 처음부터 센다.

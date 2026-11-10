@@ -6,6 +6,8 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from .clientip import DEFAULT_TRUSTED_PROXIES
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -25,8 +27,13 @@ class Settings:
     # CPU로 도는 Ollama는 느리므로 넉넉히 둔다
     ollama_timeout_seconds: float = 120.0
     api_timeout_seconds: float = 5.0
-    # 사용자(토큰) 또는 IP 하나당 1분에 받을 질문 수
+    # IP 하나당 1분에 받을 질문 수(토큰은 검증하지 않으므로 기준으로 쓰지 않는다)
     rate_limit_per_minute: int = 20
+    # IP 하나당, 서비스 전체 하루 질문 수(한국 시간 자정에 초기화). 0이면 끈다
+    daily_limit_per_ip: int = 100
+    daily_limit_total: int = 1000
+    # X-Forwarded-For에서 건너뛸 믿는 프록시(학교 프록시 + 도커·사설 대역). 쉼표로 나눈 IP·CIDR
+    trusted_proxies: str = DEFAULT_TRUSTED_PROXIES
     app_commit: str = "dev"
 
     @classmethod
@@ -55,5 +62,8 @@ class Settings:
             ollama_timeout_seconds=f("OLLAMA_TIMEOUT_SECONDS", d.ollama_timeout_seconds),
             api_timeout_seconds=f("TRACE_API_TIMEOUT_SECONDS", d.api_timeout_seconds),
             rate_limit_per_minute=int(f("CHAT_RATE_LIMIT_PER_MINUTE", d.rate_limit_per_minute)),
+            daily_limit_per_ip=int(f("CHAT_DAILY_LIMIT_PER_IP", d.daily_limit_per_ip)),
+            daily_limit_total=int(f("CHAT_DAILY_LIMIT_TOTAL", d.daily_limit_total)),
+            trusted_proxies=s("CHAT_TRUSTED_PROXIES", d.trusted_proxies),
             app_commit=s("APP_COMMIT", d.app_commit),
         )
