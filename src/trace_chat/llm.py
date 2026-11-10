@@ -131,19 +131,24 @@ def _gemini_text(data: object) -> str:
 class OllamaClient:
     """Ollama /api/chat (stream 끔)."""
 
-    def __init__(self, http: httpx.Client, base_url: str, model: str, timeout: float) -> None:
+    def __init__(self, http: httpx.Client, base_url: str, model: str, timeout: float, num_thread: int = 0) -> None:
         self._http = http
         self._base = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout
+        # 컨테이너 CPU 제한에 맞춘 스레드 수. 0이면 Ollama가 서버 코어 수만큼 띄운다
+        self._num_thread = num_thread
 
     def generate(self, system: str, messages: Sequence[Message]) -> str:
+        options: dict[str, float | int] = {"temperature": 0.3, "num_predict": 800}
+        if self._num_thread > 0:
+            options["num_thread"] = self._num_thread
         body = {
             "model": self._model,
             "stream": False,
             "messages": [{"role": "system", "content": system}]
             + [{"role": m.role, "content": m.content} for m in messages],
-            "options": {"temperature": 0.3, "num_predict": 800},
+            "options": options,
         }
         try:
             resp = self._http.post(f"{self._base}/api/chat", json=body, timeout=self._timeout)

@@ -114,6 +114,18 @@ def test_ollama는_시스템_메시지를_앞에_붙여_api_chat을_부른다():
     assert seen["body"]["model"] == "qwen2.5:3b"
     assert seen["body"]["stream"] is False
     assert seen["body"]["messages"][0] == {"role": "system", "content": "SYS"}
+    assert "num_thread" not in seen["body"]["options"]
+
+
+def test_ollama_스레드_수를_정하면_options로_넘긴다():
+    seen = {}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(req.content)
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": "네"}})
+
+    OllamaClient(client(handler), "http://o", "qwen2.5:3b", 5, num_thread=2).generate("S", MSGS)
+    assert seen["body"]["options"]["num_thread"] == 2
 
 
 def test_ollama_모델이_없으면_pull_안내가_담긴_실패다():

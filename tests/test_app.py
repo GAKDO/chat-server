@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from trace_chat.app import create_app
 from trace_chat.config import Settings
 from trace_chat.llm import AllProvidersFailed, Reply
-from trace_chat.ratelimit import RateLimiter
+from trace_chat.ratelimit import DailyLimiter, RateLimiter
 
 
 class FakeRouter:
@@ -35,15 +35,19 @@ class FakeApi:
         return None
 
 
-def make(router=None, api=None, limit: int = 20):
+def make(router=None, api=None, limit: int = 20, daily: DailyLimiter | None = None):
     router = router or FakeRouter()
     api = api or FakeApi()
-    app = create_app(Settings(app_commit="abcdef123"), router=router, api=api, limiter=RateLimiter(limit))
+    app = create_app(Settings(app_commit="abcdef123"), router=router, api=api, limiter=RateLimiter(limit),
+                     daily=daily or DailyLimiter(0, 0))
     return TestClient(app), router, api
 
 
-def ask(c: TestClient, text: str, token: str | None = None, history: list | None = None):
+def ask(c: TestClient, text: str, token: str | None = None, history: list | None = None, ip: str | None = None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
+    if ip:
+        # 학교 프록시가 넣은 사용자 IP를 gateway가 그대로 넘기는 모양
+        headers["X-Real-IP"] = ip
     return c.post("/api/v1/chat", json={"messages": (history or []) + [{"role": "user", "content": text}]},
                   headers=headers)
 
@@ -102,11 +106,62 @@ def test_1분에_정한_수를_넘으면_429_RATE_LIMITED():
     assert ask(c, "b").status_code == 200
     r = ask(c, "c")
     assert r.status_code == 429 and r.json()["code"] == "RATE_LIMITED"
-    # 다른 사용자(토큰)는 따로 센다
-    assert ask(c, "d", token="tok").status_code == 200
+    assert "1분" in r.json()["detail"]
+    # 다른 IP는 따로 센다
+    assert ask(c, "d", ip="203.0.113.7").status_code == 200
+
+
+def test_가짜_토큰을_바꿔_넣어도_같은_IP면_분당_제한을_피하지_못한다():
+    c, _, _ = make(limit=2)
+    assert ask(c, "a", token="fake-1", ip="203.0.113.7").status_code == 200
+    assert ask(c, "b", token="fake-2", ip="203.0.113.7").status_code == 200
+    assert ask(c, "c", token="fake-3", ip="203.0.113.7").status_code == 429
+    assert ask(c, "d", ip="203.0.113.7").status_code == 429
+
+
+def test_gateway가_X_Forwarded_For를_넘기게_바뀌어도_앞쪽을_꾸민_값으로는_피하지_못한다():
+    c, _, _ = make(limit=1)
+    spoof = {"X-Forwarded-For": "1.1.1.1, 203.0.113.7, 220.67.216.12"}
+    msg = {"messages": [{"role": "user", "content": "a"}]}
+    assert c.post("/api/v1/chat", json=msg, headers=spoof).status_code == 200
+    spoof["X-Forwarded-For"] = "9.9.9.9, 203.0.113.7, 220.67.216.12"
+    assert c.post("/api/v1/chat", json=msg, headers=spoof).status_code == 429
+
+
+def test_IP당_하루_상한을_넘으면_429와_내일_안내():
+    c, router, _ = make(daily=DailyLimiter(per_ip=2, total=0))
+    assert ask(c, "a", ip="203.0.113.7").status_code == 200
+    assert ask(c, "b", ip="203.0.113.7").status_code == 200
+    r = ask(c, "c", ip="203.0.113.7")
+    assert r.status_code == 429 and r.json()["code"] == "RATE_LIMITED"
+    assert "내일" in r.json()["detail"]
+    assert len(router.calls) == 2
+    assert ask(c, "d", ip="198.51.100.9").status_code == 200
+
+
+def test_서비스_전체_하루_상한을_넘으면_모든_IP가_429():
+    c, router, _ = make(daily=DailyLimiter(per_ip=0, total=2))
+    assert ask(c, "a", ip="203.0.113.7").status_code == 200
+    assert ask(c, "b", ip="198.51.100.9").status_code == 200
+    r = ask(c, "c", ip="192.0.2.1")
+    assert r.status_code == 429 and "사용량" in r.json()["detail"]
+    assert len(router.calls) == 2
 
 
 def test_모델이_모두_실패하면_503():
     c, _, _ = make(router=FakeRouter(fail=True))
     r = ask(c, "안녕")
     assert r.status_code == 503 and r.json()["code"] == "INTERNAL_ERROR"
+
+
+def test_모델이_쓴_마크다운_기호는_지우고_일반_글로_답한다():
+    class MdRouter(FakeRouter):
+        def reply(self, system, messages):
+            self.calls.append((system, list(messages)))
+            text = "## 안내\n노트북 결제는 **렌탈 창구**에서 해요.\n* [회원가입](/signup) 먼저\n`QR`을 스캔"
+            return Reply(text, "gemini")
+
+    c, router, _ = make(router=MdRouter())
+    r = ask(c, "어떻게 빌려요?")
+    assert r.json()["reply"] == "안내\n노트북 결제는 렌탈 창구에서 해요.\n- 회원가입(/signup) 먼저\nQR을 스캔"
+    assert "마크다운" in router.calls[0][0]
