@@ -50,6 +50,7 @@ POST /api/v1/chat
 | `CHAT_DAILY_LIMIT_TOTAL` | `1000` | 서비스 전체 하루 질문 수(Gemini 사용량 상한, 0이면 끔) |
 | `CHAT_TRUSTED_PROXIES` | 학교 프록시 `220.67.216.12` + 사설·도커 대역 | `X-Forwarded-For`를 오른쪽부터 읽으며 건너뛸 프록시(IP·CIDR, 쉼표) |
 | `OLLAMA_TIMEOUT_SECONDS` | `120` | |
+| `OLLAMA_NUM_THREAD` | `0` | Ollama CPU 스레드 수. compose의 ollama `cpus`와 맞춘다(0이면 서버 코어 수만큼 띄워 CPU 제한 안에서 서로 다툰다) |
 
 ## 학교 서버 Compose에 붙이기
 

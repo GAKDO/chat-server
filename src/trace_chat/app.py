@@ -88,7 +88,7 @@ def create_app(
         )
         if gemini is None:
             log.warning("GEMINI_API_KEY가 없어 Ollama(%s)로만 답한다", s.ollama_model)
-        ollama = OllamaClient(http, s.ollama_base_url, s.ollama_model, s.ollama_timeout_seconds)
+        ollama = OllamaClient(http, s.ollama_base_url, s.ollama_model, s.ollama_timeout_seconds, s.ollama_num_thread)
         router = ChatRouter(gemini, ollama, s.gemini_cooldown_seconds, s.gemini_error_cooldown_seconds)
     api = api or TraceApi(http, s.trace_api_url, s.api_timeout_seconds)
     limiter = limiter or RateLimiter(s.rate_limit_per_minute)

@@ -26,6 +26,8 @@ class Settings:
     gemini_timeout_seconds: float = 20.0
     # CPU로 도는 Ollama는 느리므로 넉넉히 둔다
     ollama_timeout_seconds: float = 120.0
+    # Ollama가 쓸 CPU 스레드 수(compose의 ollama cpus와 맞춘다). 0이면 Ollama 기본(서버 코어 수)
+    ollama_num_thread: int = 0
     api_timeout_seconds: float = 5.0
     # IP 하나당 1분에 받을 질문 수(토큰은 검증하지 않으므로 기준으로 쓰지 않는다)
     rate_limit_per_minute: int = 20
@@ -60,6 +62,7 @@ class Settings:
             gemini_error_cooldown_seconds=f("GEMINI_ERROR_COOLDOWN_SECONDS", d.gemini_error_cooldown_seconds),
             gemini_timeout_seconds=f("GEMINI_TIMEOUT_SECONDS", d.gemini_timeout_seconds),
             ollama_timeout_seconds=f("OLLAMA_TIMEOUT_SECONDS", d.ollama_timeout_seconds),
+            ollama_num_thread=int(f("OLLAMA_NUM_THREAD", d.ollama_num_thread)),
             api_timeout_seconds=f("TRACE_API_TIMEOUT_SECONDS", d.api_timeout_seconds),
             rate_limit_per_minute=int(f("CHAT_RATE_LIMIT_PER_MINUTE", d.rate_limit_per_minute)),
             daily_limit_per_ip=int(f("CHAT_DAILY_LIMIT_PER_IP", d.daily_limit_per_ip)),
