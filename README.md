@@ -7,7 +7,7 @@ TRACE 사이트(https://gakdo.site/)의 도우미 챗봇 서버입니다. 사이
 
 ## 모델 순서
 
-1. **Gemini**(Google AI Studio 무료 API, 기본 `gemini-2.5-flash`)
+1. **Gemini**(Google AI Studio 무료 API, 기본 `gemini-3.5-flash`)
 2. Gemini가 한도를 알리면(HTTP 429 또는 `RESOURCE_EXHAUSTED`) **Ollama**(`qwen2.5:3b`)로 답한다.
    그 뒤 `GEMINI_COOLDOWN_SECONDS`(기본 300초, Gemini가 알려 준 `retryDelay`가 더 길면 그만큼) 동안은 Gemini를 부르지 않고 바로 Ollama로 간다.
 3. Gemini가 한도 말고 다른 이유(5xx·연결 실패)로 실패하면 30초만 건너뛴다.
@@ -40,7 +40,7 @@ POST /api/v1/chat
 | 이름 | 기본값 | 설명 |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | (없음) | AI Studio에서 받은 키. **trace-secrets·.env에만** 두고 코드·채팅에 적지 않는다 |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | 이미 떠 있는 Ollama가 있으면 그 주소 |
 | `OLLAMA_MODEL` | `qwen2.5:3b` | CPU 서버 기준. GPU가 있으면 `qwen2.5:7b` |
 | `TRACE_API_URL` | `http://gateway:8080` | 내 정보를 읽을 API 입구 |

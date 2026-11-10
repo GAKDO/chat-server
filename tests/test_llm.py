@@ -66,10 +66,10 @@ def test_gemini_요청에_키는_헤더로만_보내고_시스템_지시와_역�
         seen["body"] = json.loads(req.content)
         return httpx.Response(200, json=gemini_ok())
 
-    g = GeminiClient(client(handler), "test-key", "gemini-2.5-flash", "https://g.example/v1beta", 5)
+    g = GeminiClient(client(handler), "test-key", "gemini-3.5-flash", "https://g.example/v1beta", 5)
     out = g.generate("SYS", [Message("user", "q"), Message("assistant", "a"), Message("user", "q2")])
     assert out == "부스에서 다시 찍어요"
-    assert seen["url"] == "https://g.example/v1beta/models/gemini-2.5-flash:generateContent"
+    assert seen["url"] == "https://g.example/v1beta/models/gemini-3.5-flash:generateContent"
     assert "test-key" not in seen["url"]
     assert seen["key"] == "test-key"
     assert seen["body"]["systemInstruction"]["parts"][0]["text"] == "SYS"
