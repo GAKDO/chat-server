@@ -1,0 +1,34 @@
+# 파이썬 검사: ruff(문법·스타일) + pytest. 모델·gateway는 가짜로 바꿔 끼우므로 키·네트워크 없이 돈다
+name: python-ci
+
+on:
+  pull_request:   # PR은 문서만 바뀌어도 돈다: 필수 검사가 '대기'로 멈춰 머지가 막히지 않게
+  push:
+    branches: [main, develop]
+    paths-ignore: ["**/*.md"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: 설치
+        run: python -m pip install -q -e ".[dev]"
+      - name: ruff
+        run: python -m ruff check .
+      - name: 테스트
+        env:
+          PYTHONUTF8: "1"
+        run: python -m pytest -q
