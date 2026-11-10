@@ -1,9 +1,12 @@
 """질문한 사람의 실제 IP. 요청 제한은 이 값으로만 센다.
 
 토큰은 chat-server가 검증하지 않으므로(아무 글자나 넣을 수 있다) 제한 기준으로 쓰지 않는다.
-학교 서버의 경로는 사용자 → 학교 프록시(nginx) → gateway → chat-server이다.
-X-Forwarded-For는 앞쪽 값을 사용자가 꾸밀 수 있으므로, 맨 오른쪽(가장 가까운 쪽)부터 읽으며
-믿는 프록시(학교 프록시·도커 내부 주소)를 건너뛰고 처음 나오는 주소를 사용자 IP로 본다.
+학교 서버의 경로는 사용자 → 학교 프록시(nginx, 220.67.216.12) → gateway → chat-server이다.
+
+- gateway(Spring Cloud Gateway 4.3)는 trusted-proxies를 설정하지 않아 들어온 X-Forwarded-*를 지운다.
+  그래서 보통은 학교 프록시가 넣은 X-Real-IP를 쓴다(gateway의 로그인 요청 제한과 같은 헤더).
+- gateway 설정이 바뀌어 X-Forwarded-For가 오면, 앞쪽 값은 사용자가 꾸밀 수 있으므로 맨 오른쪽(가장 가까운 쪽)부터
+  읽으며 믿는 프록시(학교 프록시·도커 내부 주소)를 건너뛰고 처음 나오는 주소를 사용자 IP로 본다.
 """
 
 from __future__ import annotations
@@ -42,6 +45,12 @@ def _ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
         return ipaddress.ip_address(v)
     except ValueError:
         return None
+
+
+def is_trusted(ip: str, trusted: Sequence[IpNetwork]) -> bool:
+    """사용자 IP 자리에 프록시 주소가 나왔는지(앞단이 사용자 IP를 넘기지 않으면 모두가 한 IP로 묶인다)."""
+    a = _ip(ip)
+    return a is not None and any(a.version == n.version and a in n for n in trusted)
 
 
 def client_ip(peer: str | None, forwarded_for: str | None, real_ip: str | None,

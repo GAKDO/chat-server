@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from . import __version__
-from .clientip import client_ip, parse_networks
+from .clientip import client_ip, is_trusted, parse_networks
 from .config import Settings
 from .context import TraceApi, UserContextCache, build_user_context, wants_account_data
 from .knowledge import system_prompt
@@ -94,6 +94,7 @@ def create_app(
     limiter = limiter or RateLimiter(s.rate_limit_per_minute)
     daily = daily or DailyLimiter(s.daily_limit_per_ip, s.daily_limit_total)
     trusted = parse_networks(s.trusted_proxies)
+    warned_proxy_ip = False
     cache = UserContextCache()
 
     @asynccontextmanager
@@ -129,6 +130,10 @@ def create_app(
             request.headers.get("x-real-ip"),
             trusted,
         )
+        nonlocal warned_proxy_ip
+        if not warned_proxy_ip and is_trusted(ip, trusted):
+            warned_proxy_ip = True
+            log.warning("사용자 IP 자리에 프록시 주소가 왔다. 앞단이 X-Real-IP를 넘기는지 확인할 것(모두 한 IP로 센다)")
         if not limiter.allow(ip):
             detail = "질문이 너무 잦아요. 1분 뒤 다시 보내 주세요."
             return _problem(429, "RATE_LIMITED", "질문이 너무 많습니다", detail, path)

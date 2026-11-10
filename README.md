@@ -90,6 +90,7 @@ GEMINI_API_KEY=... OLLAMA_BASE_URL=http://localhost:11434 TRACE_API_URL=https://
 
 ## 실제 IP와 요청 제한
 
-사용자 → 학교 프록시(nginx, `220.67.216.12`) → gateway → chat-server 순서로 들어온다. gateway가 `X-Forwarded-For` 끝에 프록시 주소를 붙여 넘기므로,
-오른쪽부터 읽으며 `CHAT_TRUSTED_PROXIES`에 든 주소를 건너뛰고 처음 나오는 주소를 사용자 IP로 본다. 왼쪽 값은 사용자가 꾸밀 수 있어 쓰지 않는다.
-`X-Forwarded-For`가 프록시 주소뿐이면 `X-Real-IP`를 쓴다. 카운터는 메모리에 있어 chat-server를 다시 시작하면 처음부터 센다.
+사용자 → 학교 프록시(nginx, `220.67.216.12`) → gateway → chat-server 순서로 들어온다.
+gateway(Spring Cloud Gateway 4.3)는 `trusted-proxies`를 설정하지 않아 들어온 `X-Forwarded-*`를 지우므로, 보통은 학교 프록시가 넣은 `X-Real-IP`를 쓴다(gateway 로그인 제한과 같은 헤더).
+`X-Forwarded-For`가 오면 오른쪽부터 읽으며 `CHAT_TRUSTED_PROXIES`에 든 주소를 건너뛰고 처음 나오는 주소를 사용자 IP로 본다. 왼쪽 값은 사용자가 꾸밀 수 있어 쓰지 않는다.
+사용자 IP 자리에 프록시 주소가 오면(앞단이 `X-Real-IP`를 넘기지 않음) 로그에 경고를 한 번 남긴다. 카운터는 메모리에 있어 chat-server를 다시 시작하면 처음부터 센다.

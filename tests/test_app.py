@@ -46,8 +46,8 @@ def make(router=None, api=None, limit: int = 20, daily: DailyLimiter | None = No
 def ask(c: TestClient, text: str, token: str | None = None, history: list | None = None, ip: str | None = None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if ip:
-        # 학교 프록시가 사용자 IP를 붙이고, gateway가 프록시 주소를 붙여 넘기는 모양
-        headers["X-Forwarded-For"] = f"{ip}, 220.67.216.12"
+        # 학교 프록시가 넣은 사용자 IP를 gateway가 그대로 넘기는 모양
+        headers["X-Real-IP"] = ip
     return c.post("/api/v1/chat", json={"messages": (history or []) + [{"role": "user", "content": text}]},
                   headers=headers)
 
@@ -119,7 +119,7 @@ def test_가짜_토큰을_바꿔_넣어도_같은_IP면_분당_제한을_피하�
     assert ask(c, "d", ip="203.0.113.7").status_code == 429
 
 
-def test_X_Forwarded_For_앞쪽을_꾸며도_실제_IP로_센다():
+def test_gateway가_X_Forwarded_For를_넘기게_바뀌어도_앞쪽을_꾸민_값으로는_피하지_못한다():
     c, _, _ = make(limit=1)
     spoof = {"X-Forwarded-For": "1.1.1.1, 203.0.113.7, 220.67.216.12"}
     msg = {"messages": [{"role": "user", "content": "a"}]}
