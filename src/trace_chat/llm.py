@@ -91,7 +91,7 @@ class GeminiClient:
             "generationConfig": {
                 "temperature": 0.3,
                 "maxOutputTokens": 1024,
-                # 2.5 flash는 기본으로 '생각' 토큰을 써서 답이 늦고 출력 한도를 먹는다. 안내 답변에는 필요 없다
+                # flash 모델은 기본으로 '생각' 토큰을 써서 답이 늦고 출력 한도를 먹는다. 안내 답변에는 필요 없다
                 "thinkingConfig": {"thinkingBudget": 0},
             },
         }

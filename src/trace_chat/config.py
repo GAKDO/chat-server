@@ -11,7 +11,7 @@ from dataclasses import dataclass
 class Settings:
     # 비어 있으면 Gemini를 건너뛰고 바로 Ollama로 답한다
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ollama_base_url: str = "http://ollama:11434"
     ollama_model: str = "qwen2.5:3b"
