@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chat-server"
+version = "0.1.0"
+description = "TRACE chat-server: 사이트 사용자 도우미 챗봇(Gemini 무료 → 한도 소진 시 Ollama qwen2.5)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+trace-chat = "trace_chat.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+extend-exclude = [".specify", ".claude"]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# 모델에게 주는 안내 문장은 한 줄에 한 항목으로 둔다(줄을 나누면 문장이 끊긴다)
+"src/trace_chat/knowledge.py" = ["E501"]
