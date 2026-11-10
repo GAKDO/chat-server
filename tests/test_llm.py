@@ -76,6 +76,35 @@ def test_gemini_요청에_키는_헤더로만_보내고_시스템_지시와_역�
     assert [c["role"] for c in seen["body"]["contents"]] == ["user", "model", "user"]
 
 
+def test_gemini_생각_끄기를_거부하는_모델이면_빼고_다시_보내고_그_뒤로도_뺀다():
+    bodies = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        bodies.append(body)
+        if "thinkingConfig" in body["generationConfig"]:
+            return httpx.Response(400, json={"error": {"code": 400, "status": "INVALID_ARGUMENT"}})
+        return httpx.Response(200, json=gemini_ok("네"))
+
+    g = GeminiClient(client(handler), "k", "gemini-flash-lite-latest", "https://g", 5)
+    assert g.generate("S", MSGS) == "네"
+    assert g.generate("S", MSGS) == "네"
+    assert ["thinkingConfig" in b["generationConfig"] for b in bodies] == [True, False, False]
+
+
+def test_gemini_생각_끄기와_상관없는_400은_다시_보내지_않고_실패다():
+    calls = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(400, json={"error": {"code": 400, "status": "FAILED_PRECONDITION"}})
+
+    g = GeminiClient(client(handler), "k", "m", "https://g", 5)
+    with pytest.raises(ProviderError):
+        g.generate("S", MSGS)
+    assert len(calls) == 1
+
+
 def test_gemini_429는_한도_소진으로_보고_retryDelay를_읽는다():
     g = GeminiClient(client(lambda r: httpx.Response(429, json=quota_body("42s"))), "k", "m", "https://g", 5)
     with pytest.raises(QuotaExceeded) as e:

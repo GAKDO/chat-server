@@ -81,23 +81,28 @@ class GeminiClient:
         self._model = model
         self._base = base_url.rstrip("/")
         self._timeout = timeout
+        # 생각 끄기(thinkingBudget 0)를 거부하는 모델(flash-lite 등)이 있다. 한 번 거부되면 그 뒤로는 빼고 보낸다
+        self._thinking_off = True
 
-    def generate(self, system: str, messages: Sequence[Message]) -> str:
-        body = {
+    def _body(self, system: str, messages: Sequence[Message]) -> dict[str, object]:
+        config: dict[str, object] = {"temperature": 0.3, "maxOutputTokens": 2048}
+        if self._thinking_off:
+            # flash 모델은 기본으로 '생각' 토큰을 써서 출력 한도를 먹는다. 안내 답변에는 필요 없다
+            config["thinkingConfig"] = {"thinkingBudget": 0}
+        return {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [
                 {"role": "user" if m.role == "user" else "model", "parts": [{"text": m.content}]} for m in messages
             ],
-            "generationConfig": {
-                "temperature": 0.3,
-                "maxOutputTokens": 1024,
-                # flash 모델은 기본으로 '생각' 토큰을 써서 답이 늦고 출력 한도를 먹는다. 안내 답변에는 필요 없다
-                "thinkingConfig": {"thinkingBudget": 0},
-            },
+            "generationConfig": config,
         }
+
+    def _post(self, system: str, messages: Sequence[Message]) -> tuple[httpx.Response, object, str]:
         url = f"{self._base}/models/{self._model}:generateContent"
         try:
-            resp = self._http.post(url, json=body, headers={"x-goog-api-key": self._key}, timeout=self._timeout)
+            resp = self._http.post(
+                url, json=self._body(system, messages), headers={"x-goog-api-key": self._key}, timeout=self._timeout
+            )
         except httpx.HTTPError as e:
             raise ProviderError(f"gemini 연결 실패: {type(e).__name__}") from e
         try:
@@ -107,6 +112,14 @@ class GeminiClient:
         status = ""
         if isinstance(data, dict) and isinstance(data.get("error"), dict):
             status = str(data["error"].get("status", ""))
+        return resp, data, status
+
+    def generate(self, system: str, messages: Sequence[Message]) -> str:
+        resp, data, status = self._post(system, messages)
+        if resp.status_code == 400 and status == "INVALID_ARGUMENT" and self._thinking_off:
+            log.warning("gemini 모델 %s가 생각 끄기 설정을 거부해 빼고 다시 보낸다", self._model)
+            self._thinking_off = False
+            resp, data, status = self._post(system, messages)
         if resp.status_code == 429 or status == "RESOURCE_EXHAUSTED":
             raise QuotaExceeded(f"gemini 한도 소진({resp.status_code})", _retry_after(resp, data))
         if resp.status_code >= 400:
