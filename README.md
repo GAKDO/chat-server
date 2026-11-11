@@ -34,6 +34,8 @@ POST /api/v1/chat
 - `messages`: 최근 대화(최대 40개, 한 개 2000자). 마지막은 `user`여야 한다. 서버는 대화를 저장하지 않고, 모델에는 최근 10개만 보낸다.
 - 오류는 Problem Details(`application/problem+json`): 400 `VALIDATION_FAILED`, 429 `RATE_LIMITED`(IP당 1분 20개, IP당 하루 100개, 전체 하루 1000개. `detail`에 안내 문구), 503 `INTERNAL_ERROR`(두 모델 모두 실패).
 - 내 정보는 질문에 렌탈·검사·등급·반납 같은 말이 있을 때만 읽는다(`GET /api/v1/rentals`, `/api/v1/rentals/{id}`, `/api/v1/captures/checkpoints/{id}/inspection`). 같은 토큰은 30초 캐시한다.
+- 외부 모델(Gemini)로 보내는 [내 정보]에는 기기 일련번호를 **뒤 4자리만** 넣는다(`mask_serial`). 테스트가 모델이 받은 요청에 전체 일련번호가 0건인지 확인한다.
+- 내 정보를 읽어 답했을 때만 답 끝에 `(TRACE 기록 HH:MM 조회 기준)`을 코드가 붙인다(한국 시간). 시각은 모델이 아니라 서버가 채운다.
 
 ## 환경 변수
 
