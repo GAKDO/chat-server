@@ -9,8 +9,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Literal
 
 import httpx
@@ -22,12 +23,13 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .clientip import client_ip, is_trusted, parse_networks
 from .config import Settings
-from .context import TraceApi, UserContextCache, build_user_context, wants_account_data
+from .context import TraceApi, UserContextCache, build_user_context, has_account_data, wants_account_data
 from .knowledge import plain_text, system_prompt
 from .llm import AllProvidersFailed, ChatRouter, GeminiClient, Message, OllamaClient
 from .ratelimit import DailyLimiter, RateLimiter
 
 log = logging.getLogger(__name__)
+KST = timezone(timedelta(hours=9))
 
 # 모델에게 보내는 지난 대화 수(질문·답 합쳐). 길수록 느리고 토큰을 많이 쓴다
 MAX_HISTORY = 10
@@ -76,6 +78,7 @@ def create_app(
     api: TraceApi | None = None,
     limiter: RateLimiter | None = None,
     daily: DailyLimiter | None = None,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> FastAPI:
     s = settings or Settings.from_env()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -158,6 +161,10 @@ def create_app(
             reply = router.reply(system_prompt(user_context), messages)
         except AllProvidersFailed:
             return _problem(503, "INTERNAL_ERROR", "챗봇이 잠시 답할 수 없습니다", "잠시 뒤 다시 물어봐 주세요.", path)
-        return ChatResponse(reply=plain_text(reply.text) or reply.text, provider=reply.provider)
+        text = plain_text(reply.text) or reply.text
+        if has_account_data(user_context):
+            # 내 기록을 읽어 답했을 때만, 언제 읽은 기록인지 코드가 붙인다(모델이 지어내지 않게)
+            text = f"{text}\n\n(TRACE 기록 {clock().astimezone(KST):%H:%M} 조회 기준)"
+        return ChatResponse(reply=text, provider=reply.provider)
 
     return app

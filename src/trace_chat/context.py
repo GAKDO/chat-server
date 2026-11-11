@@ -27,6 +27,26 @@ ACCOUNT_KEYWORDS = (
 
 MAX_RENTALS = 5
 MAX_DETAILED_RENTALS = 3
+SERIAL_VISIBLE = 4
+# 실제 렌탈 기록을 읽어 만든 [내 정보]는 이 말로 시작한다(답 끝 근거 꼬리말을 붙일지 정할 때 쓴다)
+ACCOUNT_DATA_HEADER = "이 계정으로 보이는 최근 렌탈"
+
+
+def mask_serial(serial: object) -> str:
+    """외부 모델(Gemini)로 보내기 전에 기기 일련번호는 뒤 4자리만 남긴다.
+
+    사용자가 자기 기기를 알아보기엔 뒤 4자리면 충분하고, 전체 번호는 밖으로 나가지 않게 한다.
+    """
+    text = str(serial or "").strip()
+    if not text:
+        return "?"
+    if len(text) <= SERIAL_VISIBLE:
+        return "*" * len(text)
+    return f"뒤 {SERIAL_VISIBLE}자리 {text[-SERIAL_VISIBLE:]}"
+
+
+def has_account_data(user_context: str | None) -> bool:
+    return bool(user_context) and user_context.startswith(ACCOUNT_DATA_HEADER)
 
 
 def wants_account_data(text: str) -> bool:
@@ -101,11 +121,11 @@ def build_user_context(api: TraceApi, token: str) -> str:
     if not rentals:
         return "이 계정에 연결된 렌탈이 없다. 수령 QR을 찍고 로그인하면 렌탈이 연결된다."
 
-    lines = [f"이 계정으로 보이는 최근 렌탈 {len(rentals)}개(최근 순):"]
+    lines = [f"{ACCOUNT_DATA_HEADER} {len(rentals)}개(최근 순):"]
     for i, r in enumerate(rentals):
         cur = r.get("currentCheckpoint") or {}
         lines.append(
-            f"- 렌탈 {r.get('rentalId')}: 기종 {r.get('modelCode') or '?'}, 일련번호 {r.get('serial') or '?'}, "
+            f"- 렌탈 {r.get('rentalId')}: 기종 {r.get('modelCode') or '?'}, 일련번호 {mask_serial(r.get('serial'))}, "
             f"렌탈 status {r.get('status')}, 시작 {r.get('startedAt') or r.get('createdAt') or '?'}, "
             f"지금 시점 {cur.get('type') or '-'}({cur.get('status') or '-'}), 리포트 /my/rentals/{r.get('rentalId')}"
         )

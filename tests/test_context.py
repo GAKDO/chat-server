@@ -2,7 +2,14 @@
 
 import httpx
 
-from trace_chat.context import TraceApi, UserContextCache, build_user_context, wants_account_data
+from trace_chat.context import (
+    TraceApi,
+    UserContextCache,
+    build_user_context,
+    has_account_data,
+    mask_serial,
+    wants_account_data,
+)
 
 RENTALS = {
     "items": [
@@ -93,3 +100,30 @@ def test_같은_토큰은_캐시에서_꺼내고_시간이_지나면_다시_읽�
     t[0] = 31
     assert cache.get_or_build("tok", build) == "v2"
     assert cache.get_or_build("other", build) == "v3"
+
+
+def test_외부_모델로_보내는_내_정보에는_일련번호_전체가_없고_뒤_4자리만_있다():
+    api = api_with(
+        {
+            "/api/v1/rentals": httpx.Response(200, json=RENTALS),
+            "/api/v1/rentals/R1": httpx.Response(200, json=RENTAL),
+            "/api/v1/captures/checkpoints/CP1/inspection": httpx.Response(200, json=INSPECTION),
+        }
+    )
+    text = build_user_context(api, "tok")
+    assert "C02EXAMPLE01" not in text
+    assert "뒤 4자리 LE01" in text
+    assert has_account_data(text)
+
+
+def test_일련번호가_짧거나_없으면_전부_가린다():
+    assert mask_serial("AB12") == "****"
+    assert mask_serial(None) == "?"
+    assert mask_serial("  ") == "?"
+
+
+def test_기록을_못_읽은_안내문은_근거_꼬리말_대상이_아니다():
+    assert not has_account_data(None)
+    assert not has_account_data(build_user_context(api_with({"/api/v1/rentals": httpx.Response(401)}), "tok"))
+    empty = api_with({"/api/v1/rentals": httpx.Response(200, json={"items": [], "nextCursor": None})})
+    assert not has_account_data(build_user_context(empty, "tok"))

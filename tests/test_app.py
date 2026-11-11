@@ -1,5 +1,7 @@
 """HTTP API."""
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from trace_chat.app import create_app
@@ -26,7 +28,7 @@ class FakeApi:
 
     def my_rentals(self, token):
         self.tokens.append(token)
-        return [{"rentalId": "R1", "status": "OPEN", "modelCode": "MBA13-M2"}]
+        return [{"rentalId": "R1", "status": "OPEN", "modelCode": "MBA13-M2", "serial": "C02FULLSERIAL9"}]
 
     def rental(self, token, rental_id):
         return {"checkpoints": []}
@@ -35,11 +37,14 @@ class FakeApi:
         return None
 
 
+FIXED_NOW = datetime(2026, 11, 12, 5, 3, tzinfo=UTC)  # KST 14:03
+
+
 def make(router=None, api=None, limit: int = 20, daily: DailyLimiter | None = None):
     router = router or FakeRouter()
     api = api or FakeApi()
     app = create_app(Settings(app_commit="abcdef123"), router=router, api=api, limiter=RateLimiter(limit),
-                     daily=daily or DailyLimiter(0, 0))
+                     daily=daily or DailyLimiter(0, 0), clock=lambda: FIXED_NOW)
     return TestClient(app), router, api
 
 
@@ -165,3 +170,23 @@ def test_모델이_쓴_마크다운_기호는_지우고_일반_글로_답한다(
     r = ask(c, "어떻게 빌려요?")
     assert r.json()["reply"] == "안내\n노트북 결제는 렌탈 창구에서 해요.\n- 회원가입(/signup) 먼저\nQR을 스캔"
     assert "마크다운" in router.calls[0][0]
+
+
+def test_모델이_받은_요청에는_일련번호_전체가_0건이다():
+    c, router, _ = make()
+    ask(c, "내 렌탈 상태 알려줘", token="tok")
+    sent = router.calls[0][0] + "".join(m.content for m in router.calls[0][1])
+    assert "C02FULLSERIAL9" not in sent
+    assert "뒤 4자리 IAL9" in sent
+
+
+def test_내_기록을_읽어_답하면_코드가_조회_시각_꼬리말을_붙인다():
+    c, _, _ = make()
+    r = ask(c, "내 렌탈 상태 알려줘", token="tok")
+    assert r.json()["reply"] == "답변\n\n(TRACE 기록 14:03 조회 기준)"
+
+
+def test_내_기록을_읽지_않은_답에는_꼬리말이_없다():
+    c, _, _ = make()
+    assert ask(c, "회원가입은 어떻게 해요?", token="tok").json()["reply"] == "답변"
+    assert ask(c, "내 렌탈 상태 알려줘").json()["reply"] == "답변"
