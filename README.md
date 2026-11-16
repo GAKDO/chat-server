@@ -54,30 +54,14 @@ POST /api/v1/chat
 | `OLLAMA_TIMEOUT_SECONDS` | `120` | |
 | `OLLAMA_NUM_THREAD` | `0` | Ollama CPU 스레드 수. compose의 ollama `cpus`와 맞춘다(0이면 서버 코어 수만큼 띄워 CPU 제한 안에서 서로 다툰다) |
 
-## 학교 서버 Compose에 붙이기
+## 학교 서버 Compose 구성 (배포됨)
 
-gitops `compose/docker-compose.yml`에 아래 두 서비스를 더한다(gitops는 A 담당이라 A가 반영). Ollama는 서버에 우리 것이 없어서 같이 띄운다.
+11/10부터 https://gakdo.site/ 학교 서버 Compose에서 돌고 있다. 구성 원본은 gitops `compose/docker-compose.yml`의 `chat-server`·`ollama` 서비스이고(gitops는 A 담당), 여기에는 요점만 적는다.
 
-```yaml
-  chat-server:
-    platform: linux/amd64
-    image: ghcr.io/gakdo/chat-server:${CHAT_SERVER_TAG:-${TRACE_TAG:-develop}}
-    restart: unless-stopped
-    mem_limit: 256m
-    depends_on: [ollama]
-    environment:
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
-      TRACE_API_URL: http://gateway:8080
-
-  ollama:
-    image: ollama/ollama:0.12.6
-    restart: unless-stopped
-    volumes: [ollama-data:/root/.ollama]
-    mem_limit: 8g          # 다른 팀과 같이 쓰는 서버라 메모리를 제한한다
-    # 포트는 밖으로 열지 않는다(chat-server만 같은 네트워크에서 부른다)
-```
+- `chat-server`: 이미지 `ghcr.io/gakdo/chat-server:develop`, 메모리 256MB, gateway 뒤에서만 받는다(포트를 밖에 열지 않음). 위 환경 변수를 compose에서 넘기고 `GEMINI_API_KEY`는 서버 `.env`에만 둔다
+- `ollama`: `ollama/ollama` 0.12.6, 서버에 우리 것이 없어서 같이 띄운다. 메모리 4GB·CPU 2개로 제한(다른 팀과 같이 쓰는 서버), 모델을 24시간 메모리에 둔다(`OLLAMA_KEEP_ALIVE`). 포트는 밖으로 열지 않는다
+- 배포: develop에 머지하면 GitHub Actions가 `:develop` 이미지를 올리고, 학교 서버의 자동 배포(gitops `compose/ops/autodeploy.sh`, 3분마다)가 받아 바꾼다. 바깥 점검(gitops "운영 점검")이 30분마다 `/api/v1/chat/ping`을 본다
+- 화면: web 오른쪽 아래 챗봇 창이 `POST /api/v1/chat`을 부른다
 
 처음 한 번 모델을 받는다: `docker compose exec ollama ollama pull qwen2.5:3b` (약 2GB).
 
