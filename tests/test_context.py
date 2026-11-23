@@ -88,6 +88,7 @@ def test_사용자_토큰으로_GET만_해서_렌탈과_시점별_등급을_정�
 
 # [상황] TRACE 서버가 401(로그인 만료)로 답한다.
 # [기대] AI가 "로그인이 만료됐으니 다시 로그인하라"고 안내할 수 있는 글을 만든다.
+#        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
 def test_토큰이_만료되면_다시_로그인하라고_안내한다():
     api = api_with({"/api/v1/rentals": httpx.Response(401)})
     assert "로그인이 만료" in build_user_context(api, "tok")
@@ -102,6 +103,7 @@ def test_렌탈이_없으면_QR_연결을_안내한다():
 
 # [상황] TRACE 서버가 500(서버 오류)으로 답한다.
 # [기대] "불러오지 못했다"는 글을 만든다(챗봇 자체는 멈추지 않음).
+#        ※ 응답 코드: 500 = 서버 내부 오류
 def test_서버_오류면_불러오지_못했다고_안내한다():
     api = api_with({"/api/v1/rentals": httpx.Response(500)})
     assert "불러오지 못했다" in build_user_context(api, "tok")

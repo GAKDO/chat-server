@@ -91,6 +91,7 @@ def test_gemini_요청에_키는_헤더로만_보내고_시스템_지시와_역�
 
 # [상황] "생각 끄기(thinkingConfig)" 옵션을 받지 않는 Gemini 모델이 400으로 거절한다.
 # [기대] 그 옵션을 빼고 한 번 더 보내 답을 받고, 다음 질문부터는 처음부터 빼고 보낸다.
+#        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
 def test_gemini_생각_끄기를_거부하는_모델이면_빼고_다시_보내고_그_뒤로도_뺀다():
     bodies = []
 
@@ -109,6 +110,7 @@ def test_gemini_생각_끄기를_거부하는_모델이면_빼고_다시_보내�
 
 # [상황] 다른 이유의 400 오류가 온다.
 # [기대] 다시 보내지 않고 바로 실패로 본다(요청은 1번만).
+#        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
 def test_gemini_생각_끄기와_상관없는_400은_다시_보내지_않고_실패다():
     calls = []
 
@@ -124,6 +126,7 @@ def test_gemini_생각_끄기와_상관없는_400은_다시_보내지_않고_실
 
 # [상황] Gemini가 429와 "42초 뒤 다시"(retryDelay 42s)를 돌려준다.
 # [기대] "한도 소진" 오류로 구분하고 기다릴 시간 42초를 읽어 둔다.
+#        ※ 응답 코드: 429 = 요청이 너무 잦아 잠시 막음
 def test_gemini_429는_한도_소진으로_보고_retryDelay를_읽는다():
     g = GeminiClient(client(lambda r: httpx.Response(429, json=quota_body("42s"))), "k", "m", "https://g", 5)
     with pytest.raises(QuotaExceeded) as e:
@@ -133,6 +136,7 @@ def test_gemini_429는_한도_소진으로_보고_retryDelay를_읽는다():
 
 # [상황] 상태 코드는 400인데 내용이 RESOURCE_EXHAUSTED(한도 소진)다.
 # [기대] 코드가 달라도 한도 소진으로 본다.
+#        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
 def test_gemini_상태가_RESOURCE_EXHAUSTED면_코드가_달라도_한도_소진이다():
     body = {"error": {"code": 400, "status": "RESOURCE_EXHAUSTED"}}
     g = GeminiClient(client(lambda r: httpx.Response(400, json=body)), "k", "m", "https://g", 5)
@@ -142,6 +146,7 @@ def test_gemini_상태가_RESOURCE_EXHAUSTED면_코드가_달라도_한도_소�
 
 # [상황] Gemini가 503(서버 문제)으로 답하거나, 200인데 답이 비어 있다.
 # [기대] 한도 소진이 아닌 "일반 실패"로 본다(짧게만 쉬고 다시 시도하게 됨).
+#        ※ 응답 코드: 503 = 서버를 지금 쓸 수 없음(점검·장애), 200 = 정상 처리됨
 def test_gemini_5xx와_빈_답은_일반_실패다():
     g = GeminiClient(client(lambda r: httpx.Response(503, json={})), "k", "m", "https://g", 5)
     with pytest.raises(ProviderError) as e:
@@ -187,6 +192,7 @@ def test_ollama_스레드_수를_정하면_options로_넘긴다():
 
 # [상황] 학교 서버 Ollama에 qwen2.5:3b 모델이 아직 내려받아져 있지 않다(404).
 # [기대] 실패 메시지에 "ollama pull qwen2.5:3b"를 실행하라는 안내가 들어간다.
+#        ※ 응답 코드: 404 = 찾을 수 없음(없는 주소나 데이터)
 def test_ollama_모델이_없으면_pull_안내가_담긴_실패다():
     http = client(lambda r: httpx.Response(404, json={"error": "model not found"}))
     o = OllamaClient(http, "http://o", "qwen2.5:3b", 5)
@@ -248,6 +254,7 @@ def test_키가_없으면_바로_ollama로_답한다():
 
 # [상황] Gemini는 한도 소진, Ollama도 실패한다.
 # [기대] "모든 모델 실패" 오류를 낸다(API에서는 503이 된다).
+#        ※ 응답 코드: 503 = 서버를 지금 쓸 수 없음(점검·장애)
 def test_둘_다_실패하면_AllProvidersFailed():
     r = ChatRouter(Fake(QuotaExceeded("q")), Fake(ProviderError("x")), 300, 30, FakeClock())
     with pytest.raises(AllProvidersFailed):
